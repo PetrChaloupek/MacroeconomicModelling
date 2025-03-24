@@ -47,16 +47,12 @@ df$l_z <- 100 * log(df$z)
 df$l_z_trnd <- hpfilter(df$l_z, freq = 1600)$trend
 df$l_z_gap <- df$l_z - df$l_z_trnd
 
-# Lead and lag variables (pro informaci, ale v VAR je nepoužijeme přímo)
-df$GDP_CZ_gap_lead <- lead(df$l_GDP_CZ_gap, 1)
-df$GDP_CZ_gap_lag <- lag(df$l_GDP_CZ_gap, 1)
-
 # Příprava dat pro VAR
 df_var <- df[, c("l_GDP_CZ_gap", "r_gap", "l_z_gap", "l_GDP_GER_gap")]
 df_var <- na.omit(df_var)  # Odstranění NA
 
 # Odhad VAR modelu
-var_model <- VAR(df_var, p = 1, type = "const")  # p = 1 lag, můžeš zkusit více
+var_model <- VAR(df_var, p = 2, type = "const")  # p = 1 lag, můžeš zkusit více
 summary(var_model)
 
 # Impulzní odezvy (IRFs)
