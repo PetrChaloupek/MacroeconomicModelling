@@ -1,0 +1,71 @@
+# Simulace ARMA(3,3) modelu
+# potlaci zobrazeni provadenych prikazu na obrazovku
+ set messages off
+ set echo off
+ 
+# nastaveni generatoru nahodnych cisel (obecne neni vhodne)
+ set seed 654321
+
+# vytvoreni datoveho souboru casovych rad o pozadovane velikosti
+ nulldata 100
+# nastaveni datoveho souboru na casove rady
+ setobs 1 1 --time-series
+
+# Simulace ARMA(3,3) modelu
+# y_t = a0 + a1*y_{t-1} + a2*y_{t-2} + a3*y_{t-3}
+#       + eps_t + b1*eps_{t-1} + b2*eps_{t-2} + b3*eps_{t-3}
+# eps ~ N(0,sigma_2)
+
+# 1) Nastaveni parametru a inicializace vektoru promennych
+ scalar T = 100+50 #celkova delka generovane rady
+ scalar a0 = 2
+ scalar a1 = 0.8
+ scalar a2 = -0.4
+ scalar a3 = 0.2
+ scalar b1 = 0.2
+ scalar b2 = -0.7
+ scalar b3 = 0.5
+ scalar sigma_2 = 0.5
+ 
+ y = zeros(T,1)   # vektor promenne y rozmeru T x 1
+ eps = zeros(T,1) # vektor nahodnych slozek eps rozmeru T x 1
+ 
+# 2) Generovani nahodnych slozek a promenne y
+# generovani nahodne slozky
+ loop t=1..T
+     eps[t] = randgen1(z,0,sqrt(sigma_2))
+     #z ... normalni rozdeleni, 0 ...stredni hodnota, sm. odchylka je sqrt(sigma_2)
+ endloop
+ 
+# varianta bez cyklu = vektorizace kodu skriptu
+# eps = mrandgen(z,0,sqrt(sigma_2),T,1)
+ 
+# generovani y
+ loop t=4..T
+     y[t] = a0 + a1*y[t-1] + a2*y[t-2] + a3*y[t-3] \
+     + eps[t] + b1*eps[t-1] + b2*eps[t-2] + b3*eps[t-3]
+ endloop
+
+# 3. Prevedni vektoru na rady
+ series Y = y[51:T] 
+ series EPS = eps[51:T]
+
+# 4. Zobrazeni rady Y
+ graf_ARMA33 <- gnuplot Y --time-series --with-lines --output=display
+
+# 5. Odhad AR(1)
+ model_AR1 <- arima 1 0 0; Y --conditional
+ e = $uhat #rezidua modelu - ulozeni z posledniho modelu
+ corrgm e 20 --plot=display
+
+# 6. Odhad ARMA(3,3)
+ model_ARMA33 <- arima 3 0 3; Y --conditional
+ e = $uhat #rezidua modelu - ulozeni z posledniho modelu
+ corrgm e 20 --plot=display
+
+# Problematika korelogramu bude dale rozebrano v dalsi prednasce
+
+
+
+
+
