@@ -1,13 +1,16 @@
-# R skript pro vytvoření grafů Mundell-Fleming modelu
-# ----------------------------------------------
+################################################################################
+########################## MUNDELL-FLEMING MODEL ###############################
+################################################################################
 
-# Načtení knihoven
+rm(list = ls())
+cat("\014")
+
 # install.packages("ggplot2")
 # install.packages("gridExtra")
 library(ggplot2)
 library(gridExtra)
 
-# Nastavení tématu pro grafy
+# Theme of the plots
 my_theme <- theme_minimal() +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5),
@@ -17,63 +20,61 @@ my_theme <- theme_minimal() +
     panel.border = element_rect(color = "black", fill = NA)
   )
 
-# ----------------------------------------------
-# IS-LM křivky pro Mundell-Fleming model
-# ----------------------------------------------
-
-# Vytvoření dat pro IS křivku
+#### IS-LM curves ##############################################################
+# IS curve
 is_data <- data.frame(
-  y = seq(0, 10, 0.1),
-  r = 10 - 0.5 * seq(0, 10, 0.1)  # r = a - b*y
+  y = seq(0, 20, 0.1),
+  r = 10 - 0.5 * seq(0, 20, 0.1)  # r = a - b*y
 )
 
-# Vytvoření dat pro LM křivku
+# LM curve
 lm_data <- data.frame(
-  y = seq(0, 10, 0.1),
-  r = 1 + 0.5 * seq(0, 10, 0.1)   # r = c + d*y
+  y = seq(0, 20, 0.1),
+  r = 1 + 0.5 * seq(0, 20, 0.1)   # r = c + d*y
 )
 
-# Graf IS-LM
+# IS-LM plot
 is_lm_plot <- ggplot() +
   geom_line(data = is_data, aes(x = y, y = r, color = "IS"), linewidth = 1.2) +
   geom_line(data = lm_data, aes(x = y, y = r, color = "LM"), linewidth = 1.2) +
   scale_color_manual(values = c("IS" = "blue", "LM" = "red")) +
+  scale_x_continuous(limits = c(0, 20)) +
   labs(
-    title = "IS-LM křivky v Mundell-Fleming modelu",
-    x = "Výstup (Y)",
-    y = "Úroková míra (r)",
-    color = "Křivky"
+    title = "IS-LM curves in Mundell-Fleming model",
+    x = "Output",
+    y = "Interest rate",
+    color = "Curves"
   ) +
   my_theme
 print(is_lm_plot)
 
-# ----------------------------------------------
-# BP křivka (platební bilance) pro Mundell-Fleming model
-# ----------------------------------------------
-
-# Vytvoření dat pro BP křivku 
+#### BP curve ##################################################################
+# BP curve
 bp_data <- data.frame(
-  y = seq(0, 10, 0.1),
-  r = 3 + 0.2 * seq(0, 10, 0.1)   # r = e + f*y
+  y = seq(0, 20, 0.1),
+  r = 3 + 0.2 * seq(0, 20, 0.1)   # r = e + f*y
 )
 
-# Graf BP
+# BP plot
 bp_plot <- ggplot() +
   geom_line(data = is_data, aes(x = y, y = r, color = "IS"), size = 1.2) +
   geom_line(data = lm_data, aes(x = y, y = r, color = "LM"), size = 1.2) +
   geom_line(data = bp_data, aes(x = y, y = r, color = "BP"), size = 1.2) +
   scale_color_manual(values = c("IS" = "blue", "LM" = "red", "BP" = "green")) +
+  scale_x_continuous(limits = c(0, 20)) +
   labs(
-    title = "IS-LM-BP křivky v Mundell-Fleming modelu",
-    x = "Výstup (Y)",
-    y = "Úroková míra (r)",
-    color = "Křivky"
+    title = "IS-LM-BP curves Mundell-Fleming modelu",
+    x = "Output",
+    y = "Interest rate",
+    color = "Curves"
   ) +
   my_theme
 print(bp_plot)
-# ----------------------------------------------
-# Simulace různých politik v Mundell-Fleming modelu
-# ----------------------------------------------
+
+#### Simulating different policies #############################################
+
+
+
 
 # 1. Fiskální expanze s pevným směnným kurzem a vysokou kapitálovou mobilitou
 is_shift <- data.frame(

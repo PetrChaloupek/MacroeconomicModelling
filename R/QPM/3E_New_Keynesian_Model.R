@@ -2,6 +2,9 @@
 ##################### THREE EQUATION NEW KEYNESIAN MODEL #######################
 ################################################################################
 
+rm(list = ls())
+cat("\014")
+
 # install.packages("ggplot2")
 # install.packages("gridExtra")
 # install.packages("reshape2")
@@ -74,44 +77,35 @@ simulate_nk_model <- function(T, shock_type = NULL, shock_size = 0.01) {
     }
     
     # IS curve
-    y_gap[t] <- alpha_1 * E_y_gap_t1 + alpha_2 * y_gap[t-1] - alpha_3 * r[t-1]
-    + shock_y[t]
+    y_gap[t] <- alpha_1 * E_y_gap_t1 + alpha_2 * y_gap[t-1] - alpha_3 * r[t-1] + shock_y[t]
     
     # Phillips curve
-    pi[t] <- beta_1 * pi[t-1] + beta_2 * E_pi_t1 + beta_3 * y_gap[t]
-    + shock_pi[t]
+    pi[t] <- beta_1 * pi[t-1] + beta_2 * E_pi_t1 + beta_3 * y_gap[t] + shock_pi[t]
     
     # Taylor rule
-    r[t] <- gamma_3 * r[t-1] + (1-gamma_3) * (gamma_1 * pi[t] + gamma_2 
-    * y_gap[t]) + shock_r[t]
+    r[t] <- gamma_3 * r[t-1] + (1-gamma_3) * (gamma_1 * pi[t] + gamma_2 * y_gap[t]) + shock_r[t]
   }
   for (iter in 1:30) {
     for (t in 2:(T-1)) {
       E_y_gap_t1 <- y_gap[t+1]
       E_pi_t1 <- pi[t+1]
       
-      y_gap[t] <- alpha_1 * E_y_gap_t1 + alpha_2 * y_gap[t-1] - alpha_3 * r[t-1]
-      + shock_y[t]
+      y_gap[t] <- alpha_1 * E_y_gap_t1 + alpha_2 * y_gap[t-1] - alpha_3 * r[t-1] + shock_y[t]
       
-      pi[t] <- beta_1 * pi[t-1] + beta_2 * E_pi_t1 + beta_3 * y_gap[t] 
-      + shock_pi[t]
+      pi[t] <- beta_1 * pi[t-1] + beta_2 * E_pi_t1 + beta_3 * y_gap[t] + shock_pi[t]
       
-      r[t] <- gamma_3 * r[t-1] + (1-gamma_3) * (gamma_1 * pi[t] + gamma_2
-      * y_gap[t]) + shock_r[t]
+      r[t] <- gamma_3 * r[t-1] + (1-gamma_3) * (gamma_1 * pi[t] + gamma_2 * y_gap[t]) + shock_r[t]
     }
     
     t <- T
     E_y_gap_t1 <- 0  # We assume a return to steady state
     E_pi_t1 <- 0     # We assume a return to steady state
     
-    y_gap[t] <- alpha_1 * E_y_gap_t1 + alpha_2 * y_gap[t-1] - alpha_3 * r[t-1]
-    + shock_y[t]
+    y_gap[t] <- alpha_1 * E_y_gap_t1 + alpha_2 * y_gap[t-1] - alpha_3 * r[t-1] + shock_y[t]
     
-    pi[t] <- beta_1 * pi[t-1] + beta_2 * E_pi_t1 + beta_3 * y_gap[t] 
-    + shock_pi[t]
+    pi[t] <- beta_1 * pi[t-1] + beta_2 * E_pi_t1 + beta_3 * y_gap[t] + shock_pi[t]
     
-    r[t] <- gamma_3 * r[t-1] + (1-gamma_3) * (gamma_1 * pi[t] + gamma_2 
-    * y_gap[t]) + shock_r[t]
+    r[t] <- gamma_3 * r[t-1] + (1-gamma_3) * (gamma_1 * pi[t] + gamma_2 * y_gap[t]) + shock_r[t]
   }
   
   # Returning the results as a data frame
