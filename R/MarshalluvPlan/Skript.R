@@ -3,8 +3,7 @@ library(fixest)
 library(ggplot2)
 library(dplyr)
 
-data <- read_excel("Library/CloudStorage/OneDrive-MUNI/Škola/Mezinárodní politická ekonomie/df.xlsx", 
-                 col_types = c("text", "numeric", "numeric", 
+data <- read_excel("df.xlsx", col_types = c("text", "numeric", "numeric", 
                                "numeric", "numeric", "numeric"))
 
 data$log_GDP_pc <- log(data$GDP_pc)
