@@ -1,0 +1,7 @@
+Variable	P_Value	Stationary
+df_l_y	0.01	Ano
+df_l_z	0.0401202835936518	Ano
+df_l_x	0.01	Ano
+l_y_gap	0.0138239268411157	Ano
+l_z_gap	0.0935880238522755	Ne
+l_x_gap	0.0653127039103709	Ne

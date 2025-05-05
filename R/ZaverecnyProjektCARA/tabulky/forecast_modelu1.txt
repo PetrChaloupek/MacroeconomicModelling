@@ -1,0 +1,20 @@
+--------------------------------------------------
+Predikční výkonnost modelů (jednokroková predikce)
+--------------------------------------------------
+Diff VAR model:
+ - MSE: 0.0141 
+ - MAE: 0.0492 
+
+Gap VAR model:
+ - MSE: 0.0037 
+ - MAE: 0.0337 
+
+Srovnání:
+ - Nižší MSE má: Gap VAR 
+ - Nižší MAE má: Gap VAR 
+
+Průměrná absolutní chyba Diff modelu: 0.9908 
+Průměrná absolutní chyba Gap modelu: 0.6228 
+
+--------------------------------------------------
+
