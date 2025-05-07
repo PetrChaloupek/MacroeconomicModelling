@@ -18,13 +18,10 @@ summary(model_did)
 model_fe <- feols(log_GDP_pc ~ DiD | Country + Year, data = data)
 summary(model_fe)
 
-
-# Skupiny a období
 data$Group <- ifelse(data$Treatment == 1, "Marshall Plan", "No Plan")
 data$Period <- ifelse(data$Year < 1948, "Pre", "Post")
 data$GroupPeriod <- paste(data$Group, data$Period, sep = " - ")
 
-# Graf s trendovými liniemi a legendou dole
 ggplot(data, aes(x = Year, y = log_GDP_pc, color = GroupPeriod)) +
   geom_point(alpha = 0.5) +
   geom_smooth(method = "lm", se = FALSE, size = 1.2) +

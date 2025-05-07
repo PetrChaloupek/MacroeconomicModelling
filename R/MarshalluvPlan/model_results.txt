@@ -1,0 +1,32 @@
+Call:
+lm(formula = log_GDP_pc ~ Treatment + Post + DiD, data = data)
+
+Residuals:
+     Min       1Q   Median       3Q      Max 
+-0.69683 -0.14014  0.01887  0.17138  0.53949 
+
+Coefficients:
+            Estimate Std. Error t value Pr(>|t|)    
+(Intercept)  8.33327    0.04146 201.006  < 2e-16 ***
+Treatment    0.42559    0.05352   7.952 4.00e-13 ***
+Post         0.33066    0.06402   5.165 7.49e-07 ***
+DiD          0.02292    0.08265   0.277    0.782    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.2487 on 151 degrees of freedom
+Multiple R-squared:  0.5523,	Adjusted R-squared:  0.5434 
+F-statistic:  62.1 on 3 and 151 DF,  p-value: < 2.2e-16
+
+======================================================================================
+
+OLS estimation, Dep. Var.: log_GDP_pc
+Observations: 155
+Fixed-effects: Country: 5,  Year: 31
+Standard-errors: Clustered (Country) 
+    Estimate Std. Error  t value Pr(>|t|) 
+DiD 0.022916   0.126012 0.181853  0.86454 
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+RMSE: 0.150077     Adj. R2: 0.783527
+                 Within R2: 0.001361
