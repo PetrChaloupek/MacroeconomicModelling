@@ -1,0 +1,395 @@
+# app.R
+library(shiny)
+library(shinythemes)
+library(ggplot2)
+library(dplyr)
+library(plotly)
+
+# UI část aplikace
+ui <- fluidPage(
+  theme = shinytheme("flatly"),
+  titlePanel("Taylorovo pravidlo pro malou otevřenou ekonomiku"),
+  
+  sidebarLayout(
+    sidebarPanel(
+      h4("Zadejte hodnoty veličin:"),
+      
+      # Vstupní parametry pro Taylorovo pravidlo
+      numericInput("neutralRate", "Neutrální úroková sazba:", 
+                   value = 1.0, min = -1, max = 10, step = 0.1),
+      
+      numericInput("inflationTarget", "Inflační cíl:", 
+                   value = 2.0, min = 0, max = 10, step = 0.1),
+      
+      numericInput("currentInflation", "Aktuální inflace:", 
+                   value = 1.8, min = -5, max = 20, step = 0.1),
+      
+      numericInput("outputGap", "Mezera výstupu:", 
+                   value = -1.4, min = -10, max = 10, step = 0.1),
+      
+      numericInput("exchangeRateGap", "Mezera reálného směnného kurzu:", 
+                   value = 1.6, min = -10, max = 10, step = 0.1),
+      
+      hr(),
+      
+      # Váhy pro jednotlivé komponenty
+      h4("Koeficienty Taylorova pravidla:"),
+      
+      sliderInput("inflationWeight", "Váha inflace:", 
+                  min = 0, max = 2, value = 1.5, step = 0.1),
+      
+      sliderInput("outputWeight", "Váha mezery výstup:", 
+                  min = 0, max = 1, value = 0.5, step = 0.1),
+      
+      sliderInput("exchangeRateWeight", "Váha směnného kurzu:", 
+                  min = 0, max = 0.5, value = 0.3, step = 0.05),
+      
+      hr(),
+      
+      # Rozšířené nastavení pro simulaci
+      checkboxInput("showSimulation", "Zobrazit simulaci různých scénářů", FALSE),
+      
+      conditionalPanel(
+        condition = "input.showSimulation == true",
+        h4("Nastavení simulace:"),
+        sliderInput("inflationRange", "Rozsah inflace:", 
+                    min = -2, max = 10, value = c(0, 6), step = 0.5),
+        sliderInput("outputGapRange", "Rozsah mezery výstupu:", 
+                    min = -5, max = 5, value = c(-2, 2), step = 0.5)
+      )
+    ),
+    
+    mainPanel(
+      tabsetPanel(
+        tabPanel("Výsledky", 
+                 br(),
+                 wellPanel(
+                   h3("Doporučená úroková sazba dle Taylorova pravidla:"),
+                   h2(textOutput("recommendedRate"), style = "color: #2c3e50; text-align: center;"),
+                   hr(),
+                   h4("Komponenty Taylorova pravidla:"),
+                   tableOutput("components")
+                 ),
+                 br(),
+                 plotlyOutput("rateGauge", height = "300px"),
+                 br(),
+                 conditionalPanel(
+                   condition = "input.showSimulation == true",
+                   h3("Simulace různých scénářů:"),
+                   plotlyOutput("simulationHeatmap", height = "400px")
+                 ),
+                 br(),
+                 wellPanel(
+                   h4("Taylorovo pravidle pro malou otevřenou ekonomiku"),
+                   p("Základní vzorec použitý v této aplikaci:"),
+                   p(strong("i = r* + π + α(π - π*) + β(y) + γ(e)")),
+                   p("kde:"),
+                   tags$ul(
+                     tags$li(strong("i"), " = doporučená úroková sazba"),
+                     tags$li(strong("r*"), " = neutrální reálná úroková sazba"),
+                     tags$li(strong("π"), " = aktuální inflace"),
+                     tags$li(strong("π*"), " = inflační cíl"),
+                     tags$li(strong("y"), " = mezera výstupu"),
+                     tags$li(strong("e"), " = mezera reálného směnného kurzu"),
+                     tags$li(strong("α, β, γ"), " = váhové koeficienty")
+                   ),
+                   p(strong("Aktuální úroková sazba (ke 4.6.) je 3,50 %"))
+                 )
+        ),
+        tabPanel("Graf vývoje", 
+                 br(),
+                 plotlyOutput("timeSeriesPlot", height = "400px"),
+                 br(),
+                 wellPanel(
+                   h4("Graf vývoje"),
+                   p("Graf zobrazuje hypotetický vývoj úrokové sazby podle Taylorova pravidla v čase, 
+                     s využitím aktuálně nastavených parametrů jako výchozího bodu."),
+                 )
+        )
+      )
+    )
+  )
+)
+
+# Server část aplikace
+server <- function(input, output) {
+  
+  # Výpočet Taylorova pravidla
+  calculateTaylorRule <- function(neutral_rate, inflation, inflation_target, 
+                                  output_gap, exchange_rate_gap,
+                                  inflation_weight, output_weight, exchange_rate_weight) {
+    
+    # Komponenty Taylorova pravidla
+    component_neutral <- neutral_rate
+    component_inflation <- inflation
+    component_inflation_gap <- inflation_weight * (inflation - inflation_target)
+    component_output_gap <- output_weight * output_gap
+    component_exchange_rate <- exchange_rate_weight * exchange_rate_gap
+    
+    # Celková doporučená sazba
+    recommended_rate <- component_neutral + component_inflation + 
+      component_inflation_gap + component_output_gap + 
+      component_exchange_rate
+    
+    # Maximum na nule (aby nedávalo záporné sazby, pokud by vyšly)
+    recommended_rate <- max(0, recommended_rate)
+    
+    # Vrátit výsledky
+    return(list(
+      recommended_rate = recommended_rate,
+      components = data.frame(
+        Komponenta = c("Neutrální sazba (r*)", 
+                       "Inflace (π)", 
+                       "Inflační mezera (π - π*)", 
+                       "Mezera výstupu (y)", 
+                       "Směnný kurz (e)",
+                       "Celková doporučená sazba"),
+        Hodnota = c(component_neutral, 
+                    component_inflation,
+                    inflation_weight * (inflation - inflation_target),
+                    output_weight * output_gap,
+                    exchange_rate_weight * exchange_rate_gap,
+                    recommended_rate),
+        Příspěvek = c(component_neutral, 
+                      component_inflation,
+                      component_inflation_gap,
+                      component_output_gap,
+                      component_exchange_rate,
+                      recommended_rate)
+      )
+    ))
+  }
+  
+  # Výpočet aktuální doporučené sazby
+  taylor_result <- reactive({
+    calculateTaylorRule(
+      input$neutralRate, 
+      input$currentInflation, 
+      input$inflationTarget,
+      input$outputGap, 
+      input$exchangeRateGap,
+      input$inflationWeight, 
+      input$outputWeight, 
+      input$exchangeRateWeight
+    )
+  })
+  
+  # Zobrazení výsledné úrokové sazby
+  output$recommendedRate <- renderText({
+    paste0(round(taylor_result()$recommended_rate, 2), " %")
+  })
+  
+  # Zobrazení komponent Taylorova pravidla
+  output$components <- renderTable({
+    components_df <- taylor_result()$components
+    components_df$Hodnota <- round(components_df$Hodnota, 2)
+    components_df$Příspěvek <- sprintf("%+.2f %%", components_df$Příspěvek)
+    components_df[1:5, ]
+  }, align = 'lrr')
+  
+  # Vytvoření grafu pro úrokovou sazbu (gauge/měřič)
+  output$rateGauge <- renderPlotly({
+    recommended_rate <- taylor_result()$recommended_rate
+    
+    fig <- plot_ly(
+      domain = list(x = c(0, 1), y = c(0, 1)),
+      value = recommended_rate,
+      type = "indicator",
+      mode = "gauge+number",
+      gauge = list(
+        axis = list(range = list(0, max(10, recommended_rate * 1.2))),
+        bar = list(color = "#2c3e50"),
+        steps = list(
+          list(range = c(0, input$inflationTarget), color = "#1f968bff"),
+          list(range = c(input$inflationTarget, 5), color = "#29AF7FFF"),
+          list(range = c(5, 8), color = "#74d055ff"),
+          list(range = c(8, max(10, recommended_rate * 1.2)), color = "#fde725ff")
+        ),
+        threshold = list(
+          line = list(color = "darkgray", width = 4),
+          thickness = 0.75,
+          value = recommended_rate
+        )
+      )
+    ) %>%
+      layout(
+        title = list(
+          text = "Doporučená úroková sazba",
+          font = list(size = 20, color = "#2c3e50"),
+          y = 0.95
+        ),
+        margin = list(t = 100, b = 20)
+      )
+    
+    fig
+  })
+  
+  # Vytvoření heat mapy pro simulaci různých scénářů
+  output$simulationHeatmap <- renderPlotly({
+    # Získání rozsahů pro simulaci
+    inflation_seq <- seq(from = input$inflationRange[1], 
+                         to = input$inflationRange[2], 
+                         by = 0.5)
+    
+    output_gap_seq <- seq(from = input$outputGapRange[1], 
+                          to = input$outputGapRange[2], 
+                          by = 0.5)
+    
+    # Vytvoření mřížky hodnot pro simulaci
+    simulation_data <- expand.grid(
+      Inflace = inflation_seq,
+      Mezera_vystupu = output_gap_seq
+    )
+    
+    # Výpočet doporučené sazby pro každou kombinaci
+    simulation_data$Doporucena_sazba <- mapply(
+      function(inflation, output_gap) {
+        result <- calculateTaylorRule(
+          input$neutralRate, 
+          inflation, 
+          input$inflationTarget,
+          output_gap, 
+          input$exchangeRateGap,
+          input$inflationWeight, 
+          input$outputWeight, 
+          input$exchangeRateWeight
+        )
+        return(result$recommended_rate)
+      },
+      simulation_data$Inflace,
+      simulation_data$Mezera_vystupu
+    )
+    
+    # Vytvoření heat mapy
+    fig <- plot_ly(
+      x = output_gap_seq,
+      y = inflation_seq,
+      z = matrix(simulation_data$Doporucena_sazba, 
+                 nrow = length(inflation_seq), 
+                 ncol = length(output_gap_seq), 
+                 byrow = TRUE),
+      type = "heatmap",
+      colorscale = "Viridis",
+      colorbar = list(title = "Úroková sazba (%)"),
+      hovertemplate = paste(
+        "Mezera výstupu: %{x} %<br>",
+        "Inflace: %{y} %<br>",
+        "Doporučená sazba: %{z} %<extra></extra>"
+      )
+    ) %>% 
+      layout(
+        xaxis = list(title = "Mezera výstupu (%)"),
+        yaxis = list(title = "Inflace (%)"),
+        title = "Doporučená úroková sazba pro různé scénáře"
+      )
+    
+    # Přidání aktuálního bodu
+    fig <- fig %>% add_trace(
+      x = input$outputGap,
+      y = input$currentInflation,
+      type = "scatter",
+      mode = "markers",
+      marker = list(color = "red", size = 10, symbol = "circle"),
+      name = "Aktuální pozice",
+      hoverinfo = "text",
+      text = paste0("Aktuální pozice: ", 
+                    "Inflace = ", input$currentInflation, "%, ",
+                    "Mezera výstupu = ", input$outputGap, "%")
+    )
+    
+    fig
+  })
+  
+  # Vytvoření grafu vývoje v čase
+  output$timeSeriesPlot <- renderPlotly({
+    # Vytvoříme hypotetický vývoj v čase (8 kvartálů)
+    quarters <- 0:8
+    
+    # Předpokládáme, že inflace a mezera výstupu se postupně vracejí k cílovým hodnotám
+    inflation_path <- input$currentInflation - (input$currentInflation - input$inflationTarget) * 
+      (1 - exp(-0.3 * quarters))
+    
+    output_gap_path <- input$outputGap * exp(-0.4 * quarters)
+    
+    # Směnný kurz se postupně vrací k rovnováze
+    exchange_rate_path <- input$exchangeRateGap * exp(-0.5 * quarters)
+    
+    # Výpočet doporučené sazby pro každý kvartál
+    recommended_rates <- sapply(1:length(quarters), function(i) {
+      result <- calculateTaylorRule(
+        input$neutralRate, 
+        inflation_path[i], 
+        input$inflationTarget,
+        output_gap_path[i], 
+        exchange_rate_path[i],
+        input$inflationWeight, 
+        input$outputWeight, 
+        input$exchangeRateWeight
+      )
+      return(result$recommended_rate)
+    })
+    
+    # Vytvoření data frame pro graf
+    time_series_data <- data.frame(
+      Kvartál = quarters,
+      Úroková_sazba = recommended_rates,
+      Inflace = inflation_path,
+      Mezera_výstupu = output_gap_path
+    )
+    
+    # Vytvoření grafu
+    fig <- plot_ly() %>%
+      add_trace(
+        data = time_series_data,
+        x = ~Kvartál,
+        y = ~Úroková_sazba,
+        type = 'scatter',
+        mode = 'lines+markers',
+        name = 'Úroková sazba',
+        line = list(color = '#2c3e50', width = 3),
+        marker = list(size = 8)
+      ) %>%
+      add_trace(
+        x = ~Kvartál,
+        y = ~Inflace,
+        type = 'scatter',
+        mode = 'lines',
+        name = 'Inflace',
+        line = list(color = '#e74c3c', width = 2, dash = 'dash')
+      ) %>%
+      add_trace(
+        x = ~Kvartál,
+        y = rep(input$inflationTarget, length(quarters)),
+        type = 'scatter',
+        mode = 'lines',
+        name = 'Inflační cíl',
+        line = list(color = '#e74c3c', width = 1, dash = 'dot')
+      ) %>%
+      add_trace(
+        x = ~Kvartál,
+        y = ~Mezera_výstupu,
+        type = 'scatter',
+        mode = 'lines',
+        name = 'Mezera výstupu',
+        line = list(color = '#3498db', width = 2, dash = 'dash'),
+        yaxis = "y2"
+      ) %>%
+      layout(
+        title = "Vývoj úrokové sazby dle Taylorova pravidla v čase",
+        xaxis = list(title = "Kvartály od současnosti"),
+        yaxis = list(title = "Úroková sazba / Inflace (%)"),
+        yaxis2 = list(
+          title = "Mezera výstupu (%)",
+          overlaying = "y",
+          side = "right"
+        ),
+        legend = list(x = 0.01, y = 0.99),
+        hovermode = "x unified"
+      )
+    
+    fig
+  })
+}
+
+# Spuštění aplikace
+shinyApp(ui = ui, server = server)
