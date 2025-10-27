@@ -1,0 +1,231 @@
+# 6. Rekurzivní odhad omezeného modelu #########################################
+
+vars <- c("l_y_gap", "l_p_gap", "l_e_gap", "l_ulc_gap", "l_m_gap", "l_x_gap")
+model_data_ts <- ts(
+  data = as.matrix(df[, vars]),
+  start = c(2000, 1),
+  frequency = 4
+)
+colnames(model_data_ts) <- vars
+
+#head(model_data_ts)
+
+# 6.1 Příprava dat pro BVAR-X ##################################################
+
+Y_names <- c("l_p_gap","l_e_gap","l_ulc_gap","l_x_gap")
+X_names <- c("l_y_gap","l_m_gap")                      
+
+stopifnot(exists("df"))
+
+df_precovid <- df %>%
+  filter(Date < as.Date("2020-01-01"))
+
+D <- df_precovid[, c(Y_names, X_names)]
+D <- D[complete.cases(D), , drop = FALSE]
+
+Y_full <- as.matrix(D[, Y_names, drop = FALSE])
+X_full <- as.matrix(D[, X_names, drop = FALSE])
+
+T  <- nrow(Y_full) - 1
+m  <- ncol(Y_full)
+kx <- ncol(X_full)
+
+Y    <- Y_full[2:(T+1), , drop = FALSE]   # Y_t
+Ylag <- Y_full[1:T,     , drop = FALSE]   # Y_{t-1}
+X    <- X_full[2:(T+1), , drop = FALSE]   # X_t
+
+ix_x <- match("l_x_gap", Y_names)        
+
+# 6.2 Nastavení priorů #########################################################
+
+lambda_1 <- 0.1
+lambda_2 <- 0.5
+lambda_4 <- 1.0
+sd_const <- 1.0
+sd_theory <- 0.25
+
+sd_own   <- lambda_1
+sd_cross <- lambda_1 * lambda_2
+sd_exo   <- lambda_4
+
+A_sd <- matrix(sd_cross, m, m); diag(A_sd) <- sd_own
+B_sd <- matrix(sd_exo,   m, kx)
+
+idx_i_export <- match("l_x_gap", Y_names)
+idx_j_price  <- match("l_p_gap", Y_names)
+idx_j_ulc    <- match("l_ulc_gap", Y_names)
+
+A_sd[idx_i_export, idx_j_price] <- sd_theory
+A_sd[idx_i_export, idx_j_ulc]   <- sd_theory
+
+# 6.3 Stan model ###############################################################
+
+suppressPackageStartupMessages(library(rstan))
+rstan::rstan_options(auto_write = TRUE)
+options(mc.cores = max(1, parallel::detectCores() - 1))
+
+stan_code <- "
+data {
+  int<lower=1> T; int<lower=1> m; int<lower=0> kx;
+  matrix[T, m] Y; matrix[T, m] Ylag; matrix[T, kx] X;
+  matrix[m, m] A_sd; matrix[m, kx] B_sd; vector[m] c_sd;
+  real<lower=0> lkj_eta;
+}
+parameters {
+  matrix[m, m] A;                 // Y_{t-1}
+  matrix[m, kx] B;                // X_t
+  vector[m] c;                    // konstanty
+  vector<lower=0>[m] sigma;
+  cholesky_factor_corr[m] L_Omega;
+}
+transformed parameters {
+  matrix[m, m] L_Sigma = diag_pre_multiply(sigma, L_Omega);
+}
+model {
+  to_vector(A) ~ normal(0, to_vector(A_sd));
+  to_vector(B) ~ normal(0, to_vector(B_sd));
+  c ~ normal(0, c_sd);
+  sigma ~ cauchy(0, 0.5);
+  L_Omega ~ lkj_corr_cholesky(lkj_eta);
+
+  for (t in 1:T) {
+    vector[m] mu = c + A * to_vector(Ylag[t]') + B * to_vector(X[t]');
+    Y[t]' ~ multi_normal_cholesky(mu, L_Sigma);
+  }
+}
+generated quantities {
+  matrix[m, m] Sigma = L_Sigma * L_Sigma';
+}
+"
+
+set.seed(123)
+sm <- stan_model(model_code = stan_code)
+
+# 6.4 Rekurzivní odhad BVAR-X (expanding window) ###############################
+
+t0 <- max(30, 2)
+t_end_seq <- t0:T
+nW <- length(t_end_seq)
+
+chains  <- 2
+iter    <- 2000
+warmup  <- 1000
+ctrl    <- list(adapt_delta = 0.90, max_treedepth = 12)
+
+pb <- txtProgressBar(min = 0, max = nW, style = 3)
+
+rec_precovid <- vector("list", nW)
+autosave_file_precovid <- "bvarx_recursive_cache_precovid.rds"
+
+muffle_built_under <- function(expr) {
+  withCallingHandlers(
+    expr,
+    warning = function(w) {
+      if (grepl("built under R version", conditionMessage(w))) {
+        try(invokeRestart("muffleWarning"), silent = TRUE)
+      }
+    }
+  )
+}
+
+for (k in seq_along(t_end_seq)) {
+  t_end <- t_end_seq[k]
+  
+  Y_t    <- Y[    1:t_end, , drop = FALSE]
+  Ylag_t <- Ylag[ 1:t_end, , drop = FALSE]
+  X_t    <- X[    1:t_end, , drop = FALSE]
+  
+  stan_data <- list(
+    T = nrow(Y_t), m = m, kx = kx,
+    Y = Y_t, Ylag = Ylag_t, X = X_t,
+    A_sd = A_sd, B_sd = B_sd,
+    c_sd = rep(sd_const, m),
+    lkj_eta = 2
+  )
+  
+  fit_t <- muffle_built_under(
+    sampling(sm, data = stan_data,
+             chains = chains, iter = iter, warmup = warmup,
+             seed = 123 + t_end, refresh = 0, control = ctrl)
+  )
+  # Získání souhrnu diagnostiky (Rhat, n_eff)
+  summary_fit <- rstan::summary(fit_t)$summary
+  max_rhat <- max(summary_fit[, "Rhat"], na.rm = TRUE)
+  min_neff <- min(summary_fit[, "n_eff"], na.rm = TRUE)
+  
+  # Získání divergencí
+  # get_sampler_params je funkce z rstan
+  sampler_params <- get_sampler_params(fit_t, inc_warmup = FALSE) 
+  divergences <- sum(sapply(sampler_params, function(x) sum(x[, "divergent__"])))
+  
+  post   <- rstan::extract(fit_t, pars = c("A","B","Sigma"))
+  A_med  <- apply(post$A,       c(2,3), median)
+  B_med  <- apply(post$B,       c(2,3), median)
+  SigmaM <- apply(post$Sigma, c(2,3), median)
+  
+  rho <- max(Mod(eigen(A_med, only.values = TRUE)$values))
+  
+  A_x_p   <- A_med[ix_x, match("l_p_gap",   Y_names)]
+  A_x_e   <- A_med[ix_x, match("l_e_gap",   Y_names)]
+  A_x_ulc <- A_med[ix_x, match("l_ulc_gap", Y_names)]
+  A_x_x   <- A_med[ix_x, match("l_x_gap",   Y_names)]
+  
+  B_x_y   <- B_med[ix_x, match("l_y_gap",   X_names)]
+  B_x_m   <- B_med[ix_x, match("l_m_gap",   X_names)]
+  
+  A0_inv <- t(chol(SigmaM))
+  b0_x_p   <- A0_inv[ix_x, match("l_p_gap",   Y_names)]
+  b0_x_e   <- A0_inv[ix_x, match("l_e_gap",   Y_names)]
+  b0_x_ulc <- A0_inv[ix_x, match("l_ulc_gap", Y_names)]
+  b0_x_x   <- A0_inv[ix_x, match("l_x_gap",   Y_names)]
+  
+  # Původní 'data.frame' jsem rozšířil o nové diagnostické proměnné
+  rec_precovid[[k]] <- data.frame(
+    t_end = t_end, rho = rho,
+    
+    # Nové diagnostické sloupce
+    max_rhat = max_rhat, 
+    min_neff = min_neff, 
+    divergences = divergences,
+    
+    # Původní koeficienty
+    A_x_p = A_x_p, A_x_e = A_x_e, A_x_ulc = A_x_ulc, A_x_x = A_x_x,
+    B_x_y = B_x_y, B_x_m = B_x_m,
+    b0_x_p = b0_x_p, b0_x_e = b0_x_e, b0_x_ulc = b0_x_ulc, b0_x_x = b0_x_x
+  )
+  if (k %% 5 == 0) saveRDS(rec_precovid[1:k], autosave_file_precovid)
+  
+  setTxtProgressBar(pb, k)
+}
+close(pb)
+
+rec_results_precovid <- do.call(rbind, rec_precovid)
+
+# 6.5 Náhled výsledků rekurzivního odhadu ######################################
+
+print(head(rec_results_precovid, 3))
+print(tail(rec_results_precovid, 3))
+
+# 6.6 Odhad modelu na celém vzorku #############################################
+
+final_stan_data <- list(
+  T = T, m = m, kx = kx,
+  Y = Y, Ylag = Ylag, X = X, 
+  A_sd = A_sd, B_sd = B_sd,
+  c_sd = rep(sd_const, m),
+  lkj_eta = 2
+)
+
+fit_final_precovid <- muffle_built_under(
+  sampling(sm, data = final_stan_data,
+           chains = chains, iter = iter, warmup = warmup,
+           seed = 123 + T, 
+           control = ctrl)
+)
+
+print(fit_final_precovid, pars = "lp__")
+check_hmc_diagnostics(fit_final_precovid)
+
+cat("Omezený model úspěšně odhadnut\n")
+
+################################################################################
