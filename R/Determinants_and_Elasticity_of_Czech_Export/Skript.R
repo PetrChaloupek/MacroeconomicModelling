@@ -60,7 +60,6 @@ df$y <- round(df$y, 2)
 
 # 1.4 Vytvoření nových proměnných pro zahraniční ceny ##########################
 
-# Ruční výpočet pro P_for
 df$P_for <- (df$P_Ger * 0.518 + df$P_Sk  * 0.128 + df$P_Pol * 0.111 +
                df$P_Fr  * 0.086 + df$P_Au  * 0.076 + df$P_It  * 0.081)
 
@@ -104,7 +103,7 @@ df_long$Variable_Title <- factor(df_long$Variable_Title,
 original_cara_plot <- ggplot(df_long, aes(x = Date, 
                                           y = Value, 
                                           color = Variable_Title)) +
-  geom_line(size = 1.2) + # Silnější čára
+  geom_line(size = 1.2) +
   facet_wrap(~ Variable_Title, ncol = 3, scales = "free_y") + 
   scale_color_brewer(palette = "Set1") + 
   scale_x_date(
@@ -115,7 +114,7 @@ original_cara_plot <- ggplot(df_long, aes(x = Date,
   scale_y_continuous(labels = scales::comma) + 
   theme_minimal(base_size = 14) + 
   labs(
-    title = "Časové řady",
+    #title = "Časové řady",
     x = "Datum",
     y = "Hodnota"
   ) +
@@ -141,7 +140,7 @@ ggsave(
 # 2.1. Výpočet gapu proměnných #################################################
 
 variables <- c("l_x", "l_y", "l_e", "l_p_cz", "l_p_for", "l_ulc", "l_m")
-lamb <- 1600 # Standardní lambda pro kvartální data
+lamb <- 1600
 
 for (var in variables) {
   y_full <- df[[var]] 
@@ -155,7 +154,7 @@ for (var in variables) {
   gap[valid_indices] <- (y_clean - trend[valid_indices]) * 100
   df[[paste0(var, "_trnd")]] <- trend
   df[[paste0(var, "_gap")]] <- gap
-  print(paste("Vypočítán jednostranný HP filtr (hp1) pro:", var))
+  print(paste("Vypočítán jednostranný HP filtr pro:", var))
 }
 
 # 2.2 Úprava proměnných ########################################################
@@ -204,8 +203,8 @@ gap_plot <- ggplot(df_long_gap, aes(x = Date,
   ) +
   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   theme_minimal(base_size = 14) + 
-  labs(
-    title = "Odchylky proměnných od trendu") +
+  #labs(
+    #title = "Odchylky proměnných od trendu") +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5), 
     legend.position = "none",
@@ -460,9 +459,6 @@ heatmap_plot <- ggplot(ccf_df, aes(x = Lag_Factor, y = Variable_Title,
     midpoint = 0,
     limits = c(-1, 1),
     name = "Korelace",
-    
-    # Zde je ten argument (pouze JEDNOU)
-    #rescaler = ~ sign(.x) * abs(.x)^0.5
   ) +
   
   scale_color_manual(values = c("white" = "white", "black" = "black"), 
@@ -474,7 +470,7 @@ heatmap_plot <- ggplot(ccf_df, aes(x = Lag_Factor, y = Variable_Title,
     axis.ticks = element_blank()
   ) +
   labs(
-    title = "Korelace s exportem (t až t−6)",
+    #title = "Korelace s exportem (t až t−6)",
     x = "Zpoždění",
     y = ""
   )
@@ -539,12 +535,11 @@ sd_exo   <- lambda_4
 A_sd <- matrix(sd_cross, m, m); diag(A_sd) <- sd_own
 B_sd <- matrix(sd_exo,   m, kx)
 
-# Najdeme indexy (předpokládám, že Y_names máte v prostředí)
 idx_i_export <- match("l_x_gap", Y_names)   # i = 4 (rovnice pro export)
 idx_j_price  <- match("l_p_gap", Y_names)   # j = 1 (vliv cen)
 idx_j_ulc    <- match("l_ulc_gap", Y_names) # j = 3 (vliv nákladů)
 
-# Přepíšeme priory v matici A_sd
+# Priory v matici A_sd
 A_sd[idx_i_export, idx_j_price] <- sd_theory
 A_sd[idx_i_export, idx_j_ulc]   <- sd_theory
 
@@ -638,13 +633,10 @@ for (k in seq_along(t_end_seq)) {
              chains = chains, iter = iter, warmup = warmup,
              seed = 123 + t_end, refresh = 0, control = ctrl)
   )
-  # Získání souhrnu diagnostiky (Rhat, n_eff)
   summary_fit <- rstan::summary(fit_t)$summary
   max_rhat <- max(summary_fit[, "Rhat"], na.rm = TRUE)
   min_neff <- min(summary_fit[, "n_eff"], na.rm = TRUE)
   
-  # Získání divergencí
-  # get_sampler_params je funkce z rstan
   sampler_params <- get_sampler_params(fit_t, inc_warmup = FALSE) 
   divergences <- sum(sapply(sampler_params, function(x) sum(x[, "divergent__"])))
 
@@ -669,16 +661,12 @@ for (k in seq_along(t_end_seq)) {
   b0_x_ulc <- A0_inv[ix_x, match("l_ulc_gap", Y_names)]
   b0_x_x   <- A0_inv[ix_x, match("l_x_gap",   Y_names)]
   
-  # Původní 'data.frame' jsem rozšířil o nové diagnostické proměnné
   rec[[k]] <- data.frame(
     t_end = t_end, rho = rho,
-    
-    # Nové diagnostické sloupce
     max_rhat = max_rhat, 
     min_neff = min_neff, 
     divergences = divergences,
     
-    # Původní koeficienty
     A_x_p = A_x_p, A_x_e = A_x_e, A_x_ulc = A_x_ulc, A_x_x = A_x_x,
     B_x_y = B_x_y, B_x_m = B_x_m,
     b0_x_p = b0_x_p, b0_x_e = b0_x_e, b0_x_ulc = b0_x_ulc, b0_x_x = b0_x_x
@@ -1108,7 +1096,7 @@ combined_irf_plot_h12 <- df_plot_final %>%
   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   theme_minimal(base_size = 14) +
   labs(
-    title = "Dopad šoků na l_x_gap",
+    #title = "Dopad šoků na l_x_gap",
     subtitle = "Neomezený model (Medián a 68% CI)",
     x = "Čtvrtletí",
     y = "Reakce (v %) odchylka od steady-state"
@@ -1143,7 +1131,7 @@ p_rho_neomezeny <- ggplot(plot_data_rho, aes(x = date, y = rho)) +
     expand = c(0, 0)
   ) +
   labs(
-    title = "Vývoj stability modelu v čase",
+    #title = "Vývoj stability modelu v čase",
     subtitle = "Neomezený model",
     x = "Poslední pozorování v okně",
     y = "Hodnota ρ"
@@ -1286,12 +1274,12 @@ comp_labels <- c(
 )
 colors_hsd_final <- c(
   "Baseline_Det"      = "grey80",
-  "Shock_l_p_gap"     = "#E41A1C", # Červená
-  "Shock_l_e_gap"     = "#377EB8", # Modrá
-  "Shock_l_ulc_gap"   = "#4DAF4A", # Zelená
-  "Shock_l_x_gap"     = "#984EA3", # Fialová
-  "Exo_l_y_gap"       = "#FF7F00", # Oranžová
-  "Exo_l_m_gap"       = "#A65628"  # Hnědá
+  "Shock_l_p_gap"     = "#E41A1C",
+  "Shock_l_e_gap"     = "#377EB8",
+  "Shock_l_ulc_gap"   = "#4DAF4A",
+  "Shock_l_x_gap"     = "#984EA3",
+  "Exo_l_y_gap"       = "#FF7F00",
+  "Exo_l_m_gap"       = "#A65628" 
 )
 
 p_hsd_new <- ggplot(plot_data_hsd_final, aes(x = Date)) +
@@ -1310,8 +1298,8 @@ p_hsd_new <- ggplot(plot_data_hsd_final, aes(x = Date)) +
     expand = c(0, 0)
   ) +
   labs(
-    title = paste("Historická šoková dekompozice pro", 
-                  variables_with_titles_gap[var_to_plot]),
+    #title = paste("Historická šoková dekompozice pro", 
+    #              variables_with_titles_gap[var_to_plot]),
     subtitle = "Černá čára: Pozorovaná data. Sloupce: Příspěvky komponent.",
     x = "Datum",
     y = "Hodnota (odchylka od trendu)"
@@ -1370,7 +1358,7 @@ p_trace_custom <- mcmc_trace(
 ) +
   scale_color_manual(values = chain_colors, name = "MCMC řetězec:") +
   labs(
-    title = "MCMC Trace Plots pro vybrané parametry",
+    #title = "MCMC Trace Plots pro vybrané parametry",
     subtitle = "Neomezený model") +
   theme_minimal(base_size = 14) +
   theme(
@@ -1541,13 +1529,11 @@ for (k in seq_along(t_end_seq)) {
              chains = chains, iter = iter, warmup = warmup,
              seed = 123 + t_end, refresh = 0, control = ctrl)
   )
-  # Získání souhrnu diagnostiky (Rhat, n_eff)
+  
   summary_fit <- rstan::summary(fit_t)$summary
   max_rhat <- max(summary_fit[, "Rhat"], na.rm = TRUE)
   min_neff <- min(summary_fit[, "n_eff"], na.rm = TRUE)
   
-  # Získání divergencí
-  # get_sampler_params je funkce z rstan
   sampler_params <- get_sampler_params(fit_t, inc_warmup = FALSE) 
   divergences <- sum(sapply(sampler_params, function(x) sum(x[, "divergent__"])))
   
@@ -1572,16 +1558,13 @@ for (k in seq_along(t_end_seq)) {
   b0_x_ulc <- A0_inv[ix_x, match("l_ulc_gap", Y_names)]
   b0_x_x   <- A0_inv[ix_x, match("l_x_gap",   Y_names)]
   
-  # Původní 'data.frame' jsem rozšířil o nové diagnostické proměnné
   rec_precovid[[k]] <- data.frame(
     t_end = t_end, rho = rho,
     
-    # Nové diagnostické sloupce
     max_rhat = max_rhat, 
     min_neff = min_neff, 
     divergences = divergences,
     
-    # Původní koeficienty
     A_x_p = A_x_p, A_x_e = A_x_e, A_x_ulc = A_x_ulc, A_x_x = A_x_x,
     B_x_y = B_x_y, B_x_m = B_x_m,
     b0_x_p = b0_x_p, b0_x_e = b0_x_e, b0_x_ulc = b0_x_ulc, b0_x_x = b0_x_x
@@ -1711,7 +1694,7 @@ create_ridge_plot <- function(data, fill_pal, color_pal, title_text) {
     geom_vline(xintercept = 0, linetype = "dashed", color = color_vline_zero) +
     theme_final_style() +
     labs(
-      title = title_text,
+      #title = title_text,
       subtitle = "Omezený model",
       x = "Hodnota koeficientu",
       y = ""
@@ -1828,8 +1811,8 @@ create_coeff_plot <- function(data, vars_to_plot, titles_map, n_col, plot_title)
     ) +
     theme_minimal(base_size = 14) +
     labs(
-      title = plot_title,
-      subtitle = "Omezený model", # <-- ZMĚNA
+      #title = plot_title,
+      subtitle = "Omezený model",
       x = "Rok (konec odhadovaného okna)",
       y = "Hodnota koeficientu"
     ) +
@@ -1997,7 +1980,7 @@ combined_irf_plot_h12 <- df_plot_final %>%
   scale_y_continuous(labels = scales::percent_format(scale = 1)) +
   theme_minimal(base_size = 14) +
   labs(
-    title = "Dopad šoků na l_x_gap",
+    #title = "Dopad šoků na l_x_gap",
     subtitle = "Omezený model (Medián a 68% CI)",
     x = "Čtvrtletí",
     y = "Reakce (v %) odchylka od steady-state"
@@ -2032,7 +2015,7 @@ p_rho_omezeny <- ggplot(plot_data_rho, aes(x = date, y = rho)) +
     expand = c(0, 0)
   ) +
   labs(
-    title = "Vývoj stability modelu v čase",
+    #title = "Vývoj stability modelu v čase",
     subtitle = "Omezený model", # <-- ZMĚNA
     x = "Poslední pozorování v okně",
     y = "Hodnota ρ"
@@ -2175,12 +2158,12 @@ comp_labels <- c(
 )
 colors_hsd_final <- c(
   "Baseline_Det"      = "grey80",
-  "Shock_l_p_gap"     = "#E41A1C", # Červená
-  "Shock_l_e_gap"     = "#377EB8", # Modrá
-  "Shock_l_ulc_gap"   = "#4DAF4A", # Zelená
-  "Shock_l_x_gap"     = "#984EA3", # Fialová
-  "Exo_l_y_gap"       = "#FF7F00", # Oranžová
-  "Exo_l_m_gap"       = "#A65628"  # Hnědá
+  "Shock_l_p_gap"     = "#E41A1C",
+  "Shock_l_e_gap"     = "#377EB8",
+  "Shock_l_ulc_gap"   = "#4DAF4A",
+  "Shock_l_x_gap"     = "#984EA3",
+  "Exo_l_y_gap"       = "#FF7F00",
+  "Exo_l_m_gap"       = "#A65628" 
 )
 
 p_hsd_new <- ggplot(plot_data_hsd_final, aes(x = Date)) +
@@ -2199,8 +2182,8 @@ p_hsd_new <- ggplot(plot_data_hsd_final, aes(x = Date)) +
     expand = c(0, 0)
   ) +
   labs(
-    title = paste("Historická šoková dekompozice pro", 
-                  variables_with_titles_gap[var_to_plot]),
+    #title = paste("Historická šoková dekompozice pro", 
+    #              variables_with_titles_gap[var_to_plot]),
     subtitle = "Omezený model (Černá čára: Pozorovaná data)",
     x = "Datum",
     y = "Hodnota (odchylka od trendu)"
@@ -2259,8 +2242,8 @@ p_trace_custom <- mcmc_trace(
 ) +
   scale_color_manual(values = chain_colors, name = "MCMC řetězec:") +
   labs(
-    title = "MCMC Trace Plots pro vybrané parametry",
-    subtitle = "Omezený model") + # <-- ZMĚNA
+    #title = "MCMC Trace Plots pro vybrané parametry",
+    subtitle = "Omezený model") +
   theme_minimal(base_size = 14) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5),
@@ -2293,3 +2276,4 @@ cat("Čas dokončení:", format(end_time, "%H:%M:%S"), "\n")
 cat("Celková doba trvání:", round(duration_mins, 2), "minut.\n")
 cat("################################################################\n")
 
+################################################################################
