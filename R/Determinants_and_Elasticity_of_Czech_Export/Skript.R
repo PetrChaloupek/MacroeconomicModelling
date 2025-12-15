@@ -30,6 +30,7 @@ library(ggridges)
 library(ggnewscale)
 library(zoo)
 library(RColorBrewer)
+library(posterior)
 
 # 1.2 Načtení dat ##############################################################
 
@@ -729,6 +730,31 @@ simple_text_table <- kable(final_table_data,
 
 writeLines(simple_text_table, "Tabs/bvar_summary_table_neomezeny.txt")
 
+post_sig <- rstan::extract(fit_final, pars = "Sigma")$Sigma
+n_draws  <- dim(post_sig)[1]
+m        <- dim(post_sig)[2]
+P_draws <- array(NA_real_, dim = c(n_draws, m, m),
+                 dimnames = list(NULL, Y_names, Y_names))
+for (d in 1:n_draws) {
+  P_draws[d,,] <- t(chol(post_sig[d,,]))
+}
+ix_x <- match("l_x_gap", Y_names)
+stopifnot(!is.na(ix_x))
+b0_x_mat <- P_draws[, ix_x, , drop = TRUE]
+colnames(b0_x_mat) <- Y_names
+b0_x_draws <- posterior::as_draws_matrix(b0_x_mat)
+out <- data.frame(
+  Determinant = Y_names,
+  Prumer      = apply(b0_x_mat, 2, mean),
+  Median      = apply(b0_x_mat, 2, median),
+  SD          = apply(b0_x_mat, 2, stats::sd),
+  stringsAsFactors = FALSE
+)
+
+write.table(out,
+            file = "Tabs/cholesky_impact_on_l_x_gap_neomezeny.txt",
+            row.names = FALSE, quote = FALSE, sep = "\t")
+
 # 5.2 Posteriorní hustoty neomezeného modelu ###################################
 
 paleta_fill_B <- c("l_m_gap" = "#9cc5b4", "l_y_gap" = "#e6cbc4")
@@ -743,9 +769,11 @@ theme_final_style <- function() {
   theme_minimal(base_size = 14) + 
     theme(
       plot.title = element_text(face = "bold", hjust = 0.5, size = 18),
-      axis.title.x = element_text(size = 14, face = "bold", margin = margin(t = 10)), 
+      axis.title.x = element_text(size = 14, face = "bold", 
+                                  margin = margin(t = 10)), 
       axis.text.x = element_text(size = 12), 
-      axis.text.y = element_text(face = "bold", size = 12, vjust = 0.5, hjust = 1), 
+      axis.text.y = element_text(face = "bold", size = 12, 
+                                 vjust = 0.5, hjust = 1), 
       panel.grid.major = element_line(color = "grey90"),
       panel.grid.minor = element_line(color = "grey95"),
       panel.background = element_rect(fill = "white", colour = NA),
@@ -797,7 +825,8 @@ create_ridge_plot <- function(data, fill_pal, color_pal, title_text) {
       quantiles = c(0.05, 0.5, 0.95), linetype = "dashed", 
       linewidth = 1.0, scale = 2, rel_min_height = 0.01
     ) +
-    scale_linetype_manual(values = c("dashed", "solid", "dashed"), guide = "none") + 
+    scale_linetype_manual(values = c("dashed", "solid", "dashed"), 
+                          guide = "none") + 
     scale_color_manual(values = color_pal, guide = "none") + 
     geom_vline(xintercept = 0, linetype = "dashed", color = color_vline_zero) +
     theme_final_style() +
@@ -855,7 +884,8 @@ Y_names <- c("l_p_gap", "l_e_gap", "l_ulc_gap", "l_x_gap")
 X_names <- c("l_y_gap", "l_m_gap")
 
 D_with_dates <- df[, c("Date", Y_names, X_names)] 
-D_with_dates_complete <- D_with_dates[complete.cases(D_with_dates), , drop = FALSE]
+D_with_dates_complete <- D_with_dates[complete.cases(D_with_dates), , 
+                                      drop = FALSE]
 
 full_dates <- D_with_dates_complete$Date
 T_val <- length(full_dates) - 1 
@@ -891,7 +921,8 @@ coeff_titles_b0 <- c(
 )
 vars_b0 <- names(coeff_titles_b0)
 
-create_coeff_plot <- function(data, vars_to_plot, titles_map, n_col, plot_title) {
+create_coeff_plot <- function(data, vars_to_plot, titles_map, 
+                              n_col, plot_title) {
   
   rec_long <- data %>%
     select(Date, all_of(vars_to_plot)) %>%
@@ -1008,8 +1039,10 @@ for (d in 1:n_draws) {
 }
 
 irf_median <- apply(irf_draws_array, c(1, 2, 3), median)
-irf_q16 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.16, na.rm = TRUE)
-irf_q84 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.84, na.rm = TRUE)
+irf_q16 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.16, 
+                 na.rm = TRUE)
+irf_q84 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.84, 
+                 na.rm = TRUE)
 
 dimnames(irf_median) <- list(horizon = 0:H, response = Y_names, shock = Y_names)
 dimnames(irf_q16) <- dimnames(irf_median)
@@ -1043,7 +1076,8 @@ for (d in 1:n_draws_x) {
 irf_x_median <- apply(irf_x_array, c(1, 2, 3), median)
 irf_x_q16 <- apply(irf_x_array, c(1, 2, 3), quantile, probs = 0.16, na.rm = TRUE)
 irf_x_q84 <- apply(irf_x_array, c(1, 2, 3), quantile, probs = 0.84, na.rm = TRUE)
-dimnames(irf_x_median) <- list(horizon = 0:H, response = Y_names, shock_X = X_names)
+dimnames(irf_x_median) <- list(horizon = 0:H, response = Y_names, 
+                               shock_X = X_names)
 dimnames(irf_x_q16) <- dimnames(irf_x_median)
 dimnames(irf_x_q84) <- dimnames(irf_x_median)
 
@@ -1153,7 +1187,7 @@ ggsave(
   dpi = 300
 )
 
-# 5.6 Historická šoková dekompozice #############################################
+# 5.6 Historická šoková dekompozice ############################################
 
 post_full <- rstan::extract(fit_final, pars = c("A", "B", "c", "Sigma"))
 A_draws <- post_full$A
@@ -1641,9 +1675,11 @@ theme_final_style <- function() {
   theme_minimal(base_size = 14) + 
     theme(
       plot.title = element_text(face = "bold", hjust = 0.5, size = 18),
-      axis.title.x = element_text(size = 14, face = "bold", margin = margin(t = 10)), 
+      axis.title.x = element_text(size = 14, face = "bold", 
+                                  margin = margin(t = 10)), 
       axis.text.x = element_text(size = 12), 
-      axis.text.y = element_text(face = "bold", size = 12, vjust = 0.5, hjust = 1), 
+      axis.text.y = element_text(face = "bold", size = 12, vjust = 0.5, 
+                                 hjust = 1), 
       panel.grid.major = element_line(color = "grey90"),
       panel.grid.minor = element_line(color = "grey95"),
       panel.background = element_rect(fill = "white", colour = NA),
@@ -1689,7 +1725,8 @@ create_ridge_plot <- function(data, fill_pal, color_pal, title_text) {
       quantiles = c(0.05, 0.5, 0.95), linetype = "dashed", 
       linewidth = 1.0, scale = 2, rel_min_height = 0.01
     ) +
-    scale_linetype_manual(values = c("dashed", "solid", "dashed"), guide = "none") + 
+    scale_linetype_manual(values = c("dashed", "solid", "dashed"), 
+                          guide = "none") + 
     scale_color_manual(values = color_pal, guide = "none") + 
     geom_vline(xintercept = 0, linetype = "dashed", color = color_vline_zero) +
     theme_final_style() +
@@ -1744,7 +1781,8 @@ recessions_df <- data.frame(
 )
 
 D_with_dates <- df_precovid[, c("Date", Y_names, X_names)] 
-D_with_dates_complete <- D_with_dates[complete.cases(D_with_dates), , drop = FALSE]
+D_with_dates_complete <- D_with_dates[complete.cases(D_with_dates), , 
+                                      drop = FALSE]
 
 full_dates <- D_with_dates_complete$Date
 T_val <- length(full_dates) - 1 
@@ -1780,7 +1818,8 @@ coeff_titles_b0 <- c(
 )
 vars_b0 <- names(coeff_titles_b0)
 
-create_coeff_plot <- function(data, vars_to_plot, titles_map, n_col, plot_title) {
+create_coeff_plot <- function(data, vars_to_plot, titles_map, n_col, 
+                              plot_title) {
   
   rec_long <- data %>%
     select(Date, all_of(vars_to_plot)) %>%
@@ -1896,8 +1935,10 @@ for (d in 1:n_draws) {
   }
 }
 irf_median <- apply(irf_draws_array, c(1, 2, 3), median)
-irf_q16 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.16, na.rm = TRUE)
-irf_q84 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.84, na.rm = TRUE)
+irf_q16 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.16, 
+                 na.rm = TRUE)
+irf_q84 <- apply(irf_draws_array, c(1, 2, 3), quantile, probs = 0.84, 
+                 na.rm = TRUE)
 dimnames(irf_median) <- list(horizon = 0:H, response = Y_names, shock = Y_names)
 dimnames(irf_q16) <- dimnames(irf_median)
 dimnames(irf_q84) <- dimnames(irf_median)
@@ -1926,9 +1967,12 @@ for (d in 1:n_draws_x) {
   }
 }
 irf_x_median <- apply(irf_x_array, c(1, 2, 3), median)
-irf_x_q16 <- apply(irf_x_array, c(1, 2, 3), quantile, probs = 0.16, na.rm = TRUE)
-irf_x_q84 <- apply(irf_x_array, c(1, 2, 3), quantile, probs = 0.84, na.rm = TRUE)
-dimnames(irf_x_median) <- list(horizon = 0:H, response = Y_names, shock_X = X_names)
+irf_x_q16 <- apply(irf_x_array, c(1, 2, 3), quantile, probs = 0.16, 
+                   na.rm = TRUE)
+irf_x_q84 <- apply(irf_x_array, c(1, 2, 3), quantile, probs = 0.84, 
+                   na.rm = TRUE)
+dimnames(irf_x_median) <- list(horizon = 0:H, response = Y_names, 
+                               shock_X = X_names)
 dimnames(irf_x_q16) <- dimnames(irf_x_median)
 dimnames(irf_x_q84) <- dimnames(irf_x_median)
 df_x_median <- as.data.frame.table(irf_x_median, responseName = "median")
